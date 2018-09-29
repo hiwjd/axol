@@ -1,5 +1,5 @@
-/cmd/data
-/cmd/.DS_Store
-/.vscode
-/.idea
-/.DS_Store
+data
+.DS_Store
+.vscode
+.idea
+.DS_Store

@@ -2,17 +2,20 @@
 
 > axure online preview
 
-![](snapshots/snapshot1.png)
+![未登录](snapshots/snapshot1.png)
 
-![](snapshots/snapshot2.png)
+![已登录](snapshots/snapshot2.png)
 
-## 开始使用
+## 使用
 
-1. 登记账号
-2. 登录账号
-3. 创建项目
-4. 上传项目
-5. 预览
+```bash
+cd cmd/axol
+# 这里build成amd64平台linux操作系统的可执行文件
+env GOOS=linux GOARCH=amd64 go build
+
+# dataDir是保存数据库和项目文件的目录
+./axol -port 8090 -dataDir ./data
+```
 
 ## 技术设计
 
