@@ -1,7 +1,6 @@
 package axol
 
 import (
-	"archive/zip"
 	"bytes"
 	"crypto/md5"
 	"encoding/json"
@@ -12,7 +11,6 @@ import (
 	"net/http"
 	"os"
 	"path"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -30,6 +28,7 @@ const (
 	PROJ_UPLOAD
 	PROJ_VIEW_VERSION
 	PROJ_VIEW_LATEST
+	INDEX
 	STATIC
 	NOT_FOUND
 	NOT_SUPPORT
@@ -57,6 +56,10 @@ func NewHttpHandler(ss StoreService, projDir string) *HttpHandler {
 	hh.handlers[NOT_SUPPORT] = func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(400)
 	}
+	hh.handlers[INDEX] = func(w http.ResponseWriter, r *http.Request) {
+		fpath := "./static/index.html"
+		hh.serveFile(fpath, w)
+	}
 	hh.handlers[STATIC] = func(w http.ResponseWriter, r *http.Request) {
 		// /static/*
 		sArr := strings.Split(r.URL.Path, "/")
@@ -64,14 +67,7 @@ func NewHttpHandler(ss StoreService, projDir string) *HttpHandler {
 		params = append(params, sArr[2:]...)
 		fpath := path.Join(params...)
 
-		f, err := os.Open(fpath)
-		if err != nil {
-			w.WriteHeader(404)
-			return
-		}
-		defer f.Close()
-
-		io.Copy(w, f)
+		hh.serveFile(fpath, w)
 	}
 
 	return hh
@@ -118,8 +114,11 @@ func (hh *HttpHandler) signup(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("用户注册失败"))
 	}
 
+	sid := uuid.NewV4().String()
+	hh.sessions[sid] = name
+
 	w.WriteHeader(200)
-	w.Write([]byte("注册成功"))
+	w.Write([]byte(sid))
 }
 func (hh *HttpHandler) signin(w http.ResponseWriter, r *http.Request) {
 	name := r.FormValue("name")
@@ -214,68 +213,16 @@ func (hh *HttpHandler) projectUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rd, err := zip.NewReader(bytes.NewReader(body), r.ContentLength)
-	if err != nil {
-		log.Println(err)
-		w.WriteHeader(500)
-		w.Write([]byte("上传失败"))
-		return
-	}
-
 	// 版本+1
 	nv := projFind.GetNextVersion()
-	dest := path.Join(hh.projDir, projFind.ID, nv)
+	dstDir := path.Join(hh.projDir, projFind.ID, nv)
 
-	for _, f := range rd.File {
+	rd := bytes.NewReader(body)
 
-		rc, err := f.Open()
-		if err != nil {
-			w.WriteHeader(500)
-			w.Write([]byte("上传失败"))
-			return
-		}
-		defer rc.Close()
-
-		// Store filename/path for returning and using later on
-		fpath := filepath.Join(dest, f.Name)
-
-		// Check for ZipSlip. More Info: http://bit.ly/2MsjAWE
-		if !strings.HasPrefix(fpath, filepath.Clean(dest)+string(os.PathSeparator)) {
-			log.Printf("%s: illegal file path\n", fpath)
-			w.WriteHeader(500)
-			w.Write([]byte("上传失败"))
-			return
-		}
-
-		if f.FileInfo().IsDir() {
-			// Make Folder
-			os.MkdirAll(fpath, os.ModePerm)
-		} else {
-			// Make File
-			if err = os.MkdirAll(filepath.Dir(fpath), os.ModePerm); err != nil {
-				w.WriteHeader(500)
-				w.Write([]byte("上传失败"))
-				return
-			}
-
-			outFile, err := os.OpenFile(fpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
-			if err != nil {
-				w.WriteHeader(500)
-				w.Write([]byte("上传失败"))
-				return
-			}
-
-			_, err = io.Copy(outFile, rc)
-
-			// Close the file without defer to close before next iteration of loop
-			outFile.Close()
-
-			if err != nil {
-				w.WriteHeader(500)
-				w.Write([]byte("上传失败"))
-				return
-			}
-		}
+	if err = UnzipFile(rd, dstDir); err != nil {
+		w.WriteHeader(500)
+		w.Write([]byte(`上传失败`))
+		return
 	}
 
 	projFind.AppendVersion(nv)
@@ -354,16 +301,7 @@ func (hh *HttpHandler) projectViewLatest(w http.ResponseWriter, r *http.Request)
 	params = append(params, sArr[4:]...)
 	fpath := path.Join(params...)
 
-	f, err := os.Open(fpath)
-	if err != nil {
-		log.Println(err)
-		w.WriteHeader(404)
-		w.Write([]byte("没有这个页面"))
-		return
-	}
-	defer f.Close()
-
-	io.Copy(w, f)
+	hh.serveFile(fpath, w)
 }
 
 // /p/v2/8941966ae7817d063d1f2be0c1d558b2/index.html
@@ -388,16 +326,7 @@ func (hh *HttpHandler) projectViewVersion(w http.ResponseWriter, r *http.Request
 	params = append(params, sArr[4:]...)
 	fpath := path.Join(params...)
 
-	f, err := os.Open(fpath)
-	if err != nil {
-		log.Println(err)
-		w.WriteHeader(404)
-		w.Write([]byte("没有这个页面"))
-		return
-	}
-	defer f.Close()
-
-	io.Copy(w, f)
+	hh.serveFile(fpath, w)
 }
 
 func (hh *HttpHandler) matchRequestType(r *http.Request) RequestType {
@@ -423,8 +352,10 @@ func (hh *HttpHandler) matchRequestType(r *http.Request) RequestType {
 			return PROJ_VIEW_LATEST
 		} else if strings.HasPrefix(path, "/p/v") {
 			return PROJ_VIEW_VERSION
-		} else if strings.HasPrefix(path, "/static") {
+		} else if strings.HasPrefix(path, "/static/") {
 			return STATIC
+		} else if path == "/" || path == "" {
+			return INDEX
 		} else {
 			return NOT_FOUND
 		}
@@ -434,7 +365,7 @@ func (hh *HttpHandler) matchRequestType(r *http.Request) RequestType {
 }
 
 func (hh *HttpHandler) checkLogin(w http.ResponseWriter, r *http.Request) string {
-	a := r.Header.Get("authorization")
+	a := r.Header.Get("Authorization")
 	if a == "" {
 		w.WriteHeader(400)
 		w.Write([]byte(`没有登录`))
@@ -448,4 +379,15 @@ func (hh *HttpHandler) checkLogin(w http.ResponseWriter, r *http.Request) string
 	w.WriteHeader(400)
 	w.Write([]byte(`没有登录`))
 	return ""
+}
+
+func (hh *HttpHandler) serveFile(fpath string, w http.ResponseWriter) {
+	f, err := os.Open(fpath)
+	if err != nil {
+		w.WriteHeader(404)
+		return
+	}
+	defer f.Close()
+
+	io.Copy(w, f)
 }

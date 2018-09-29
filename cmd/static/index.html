@@ -1,17 +1,291 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html>
 <head>
-    <meta charset="utf-8">
-    <title>Single file upload</title>
+  <meta charset="UTF-8">
+  <!-- import CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/element-ui/lib/theme-chalk/index.css">
 </head>
 <body>
-<h1>Upload single file with fields</h1>
+  <div id="app" style="width: 800px; margin: 0 auto;">
+    <div style="text-align: right;">
+      <el-popover
+        v-if="isSignIn"
+        placement="bottom"
+        width="160"
+        v-model="uploadFormVisible">
+        
+        <el-form ref="form" :model="uploadForm" label-position="top" size="mini">
+          <el-form-item label="项目">
+            <el-select v-model="uploadForm.projID" filterable placeholder="请选择">
+              <el-option
+                v-for="proj in projs"
+                :key="proj.ID"
+                :label="proj.name"
+                :value="proj.ID">
+              </el-option>
+            </el-select>
+          </el-form-item>
+          <el-form-item>
+            <input type="file" id="file" />
+          </el-form-item>
+        </el-form>
 
-<form action="/upload" method="post" enctype="multipart/form-data">
-    Name: <input type="text" name="name"><br>
-    Email: <input type="email" name="email"><br>
-    Files: <input type="file" name="file"><br><br>
-    <input type="submit" value="Submit">
-</form>
+        <div style="text-align: right; margin: 0">
+          <el-button size="mini" type="text" @click="uploadFormVisible = false">取消</el-button>
+          <el-button type="primary" size="mini" @click="upload">上传</el-button>
+        </div>
+        <el-button size="mini" slot="reference">上传</el-button>
+      </el-popover>
+
+      <el-popover
+        v-if="isSignIn"
+        placement="bottom"
+        width="160"
+        v-model="createFormVisible">
+        
+        <el-form ref="form" :model="createForm" label-position="top" size="mini">
+          <el-form-item label="项目名称">
+            <el-input v-model="createForm.name"></el-input>
+          </el-form-item>
+        </el-form>
+
+        <div style="text-align: right; margin: 0">
+          <el-button size="mini" type="text" @click="createFormVisible = false">取消</el-button>
+          <el-button type="primary" size="mini" @click="create">创建</el-button>
+        </div>
+        <el-button size="mini" slot="reference">创建</el-button>
+      </el-popover>
+
+      <el-button size="mini" v-if="isSignIn" @click="signout">登出</el-button>
+
+      <el-popover
+        v-if="!isSignIn"
+        placement="bottom"
+        width="160"
+        v-model="signinFormVisible">
+        
+        <el-form ref="form" :model="signinForm" label-position="top" size="mini">
+          <el-form-item label="用户名">
+            <el-input v-model="signinForm.name"></el-input>
+          </el-form-item>
+          <el-form-item label="密码">
+            <el-input v-model="signinForm.pass"></el-input>
+          </el-form-item>
+        </el-form>
+
+        <div style="text-align: right; margin: 0">
+          <el-button size="mini" type="text" @click="signinFormVisible = false">取消</el-button>
+          <el-button type="primary" size="mini" @click="signin">登录</el-button>
+        </div>
+        <el-button size="mini" slot="reference">登录</el-button>
+      </el-popover>
+
+      <el-popover
+        v-if="!isSignIn"
+        placement="bottom"
+        width="160"
+        v-model="signupFormVisible">
+        
+        <el-form ref="form" :model="signupForm" label-position="top" size="mini">
+          <el-form-item label="用户名">
+            <el-input v-model="signupForm.name"></el-input>
+          </el-form-item>
+          <el-form-item label="密码">
+            <el-input v-model="signupForm.pass"></el-input>
+          </el-form-item>
+        </el-form>
+
+        <div style="text-align: right; margin: 0">
+          <el-button size="mini" type="text" @click="signupFormVisible = false">取消</el-button>
+          <el-button type="primary" size="mini" @click="signup">注册</el-button>
+        </div>
+        <el-button size="mini" slot="reference">注册</el-button>
+      </el-popover>
+    </div>
+
+    <div style="margin-top: 20px;">
+      <el-input
+        placeholder="搜索项目"
+        v-model="filter"
+        clearable>
+      </el-input>
+      <ul>
+        <li v-for="proj in filteredProjs">
+          <span v-if="!proj.versions">{{proj.name}} [还没有文件]</span>
+          <a v-if="proj.versions" target="_blank" :href="'/p/latest/'+proj.ID+'/index.html'">{{proj.name}}</a>
+        </li>
+      </ul>
+    </div>
+  </div>
 </body>
+  <!-- import Vue before Element -->
+  <script src="https://cdn.jsdelivr.net/npm/vue"></script>
+  <!-- import JavaScript -->
+  <script src="https://unpkg.com/element-ui/lib/index.js"></script>
+  <script>
+    new Vue({
+      el: '#app',
+      data: function() {
+        return {
+          isSignIn: localStorage.getItem("Authorization"),
+          projs: [],
+          filter: "",
+          signinFormVisible: false,
+          signupFormVisible: false,
+          uploadFormVisible: false,
+          createFormVisible: false,
+          signinForm: {
+            name: "",
+            pass: ""
+          },
+          signupForm: {
+            name: "",
+            pass: ""
+          },
+          uploadForm: {
+            projID: ""
+          },
+          createForm: {
+            name: ""
+          }
+        }
+      },
+      computed: {
+        filteredProjs: function() {
+          if (!this.filter) {
+            return this.projs;
+          }
+
+          var r = [];
+          for (var i=0; i<this.projs.length; i++) {
+            if (this.projs[i].name.indexOf(this.filter) > -1) {
+              r.push(this.projs[i]);
+            }
+          }
+          return r;
+        }
+      },
+      methods: {
+        signin: function() {
+          fetch("/sign_in", {
+            method: "POST",
+            headers: {
+              "Content-type": "application/x-www-form-urlencoded; charset=UTF-8"
+            },
+            body: "name="+this.signinForm.name+"&pass="+this.signinForm.pass
+          })
+          .then(rsp => {
+            if (rsp.status == 200) {
+              rsp.text().then(text => {
+                localStorage.setItem("Authorization", text);
+                this.isSignIn = true
+              })
+            } else {
+              rsp.text().then(text => {
+                alert(text);
+              })
+            }
+          })
+          .catch(err => {
+            alert(err);
+          });
+          return false;
+        },
+        signup: function() {
+          fetch("/sign_up", {
+            method: "POST",
+            headers: {
+              "Content-type": "application/x-www-form-urlencoded; charset=UTF-8"
+            },
+            body: "name="+this.signupForm.name+"&pass="+this.signupForm.pass
+          })
+          .then(rsp => {
+            if (rsp.status == 200) {
+              rsp.text().then(text => {
+                localStorage.setItem("Authorization", text);
+                this.isSignIn = true
+              })
+            } else {
+              rsp.text().then(text => {
+                alert(text);
+              })
+            }
+          })
+          .catch(err => {
+            alert(err);
+          });
+          return false;
+        },
+        create: function() {
+          fetch("/project/create", {
+            method: "POST",
+            headers: {
+              "Content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+              "Authorization": localStorage.getItem("Authorization")
+            },
+            body: "name="+this.createForm.name
+          })
+          .then(rsp => {
+            if (rsp.status == 200) {
+              this.fetchProjs();
+            }
+            
+            rsp.text().then(text => {
+              alert(text);
+            })
+          })
+          .catch(err => {
+            alert(err);
+          });
+          return false;
+        },
+        upload: function() {
+          var input = document.getElementById('file');
+          if (!input || !input.files || !input.files.length) {
+            return;
+          }
+          fetch("/project/upload?projID=" + this.uploadForm.projID, {
+            method: "POST",
+            headers: {
+              "Content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+              "Authorization": localStorage.getItem("Authorization")
+            },
+            body: input.files[0]
+          })
+          .then(rsp => {
+            if (rsp.status == 200) {
+              this.fetchProjs();
+            }
+            rsp.text().then(text => {
+              alert(text)
+            })
+          })
+          .catch(err => {
+            alert(err);
+          });
+          return false;
+        },
+        signout: function() {
+          localStorage.removeItem("Authorization");
+          this.isSignIn = false;
+          return false;
+        },
+        fetchProjs: function() {
+          fetch("/project/all", {
+            method: "GET"
+          })
+          .then(response => response.json())
+          .then(jsonData => {
+            this.projs = jsonData;
+          })
+          .catch(err => {
+            //error block
+          })
+        }
+      },
+      mounted: function() {
+        this.fetchProjs();
+      }
+    })
+  </script>
 </html>

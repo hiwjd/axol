@@ -42,7 +42,7 @@ func (p Project) GetMaxVersion() string {
 
 func (p Project) getMaxVersionNumber() int64 {
 	if p.Versions == nil {
-		return 1
+		return 0
 	}
 
 	var max int64
