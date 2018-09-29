@@ -2,6 +2,10 @@
 
 > axure online preview
 
+![](snapshots/snapshot1.png)
+
+![](snapshots/snapshot2.png)
+
 ## 开始使用
 
 1. 登记账号
