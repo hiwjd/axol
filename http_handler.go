@@ -5,11 +5,9 @@ import (
 	"crypto/md5"
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
-	"os"
 	"path"
 	"strings"
 	"time"
@@ -58,7 +56,7 @@ func NewHttpHandler(ss StoreService, projDir string) *HttpHandler {
 	}
 	hh.handlers[INDEX] = func(w http.ResponseWriter, r *http.Request) {
 		fpath := "./static/index.html"
-		hh.serveFile(fpath, w)
+		http.ServeFile(w, r, fpath)
 	}
 	hh.handlers[STATIC] = func(w http.ResponseWriter, r *http.Request) {
 		// /static/*
@@ -67,7 +65,7 @@ func NewHttpHandler(ss StoreService, projDir string) *HttpHandler {
 		params = append(params, sArr[2:]...)
 		fpath := path.Join(params...)
 
-		hh.serveFile(fpath, w)
+		http.ServeFile(w, r, fpath)
 	}
 
 	return hh
@@ -301,7 +299,7 @@ func (hh *HttpHandler) projectViewLatest(w http.ResponseWriter, r *http.Request)
 	params = append(params, sArr[4:]...)
 	fpath := path.Join(params...)
 
-	hh.serveFile(fpath, w)
+	http.ServeFile(w, r, fpath)
 }
 
 // /p/v2/8941966ae7817d063d1f2be0c1d558b2/index.html
@@ -326,7 +324,7 @@ func (hh *HttpHandler) projectViewVersion(w http.ResponseWriter, r *http.Request
 	params = append(params, sArr[4:]...)
 	fpath := path.Join(params...)
 
-	hh.serveFile(fpath, w)
+	http.ServeFile(w, r, fpath)
 }
 
 func (hh *HttpHandler) matchRequestType(r *http.Request) RequestType {
@@ -379,15 +377,4 @@ func (hh *HttpHandler) checkLogin(w http.ResponseWriter, r *http.Request) string
 	w.WriteHeader(400)
 	w.Write([]byte(`没有登录`))
 	return ""
-}
-
-func (hh *HttpHandler) serveFile(fpath string, w http.ResponseWriter) {
-	f, err := os.Open(fpath)
-	if err != nil {
-		w.WriteHeader(404)
-		return
-	}
-	defer f.Close()
-
-	io.Copy(w, f)
 }
